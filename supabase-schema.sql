@@ -185,3 +185,10 @@ drop policy if exists "authenticated users can manage occurrences" on public.occ
 create policy "authenticated users can manage occurrences" on public.occurrences for all to authenticated using (true) with check (true);
 
 insert into public.sectors (name) values ('Frios'), ('Açougue') on conflict (name) do nothing;
+
+drop policy if exists stores_admin_insert on public.stores;
+create policy stores_admin_insert on public.stores for insert to authenticated with check (public.is_admin());
+drop policy if exists stores_admin_update on public.stores;
+create policy stores_admin_update on public.stores for update to authenticated using (public.is_admin()) with check (public.is_admin());
+drop policy if exists memberships_admin_manage on public.store_memberships;
+create policy memberships_admin_manage on public.store_memberships for all to authenticated using (public.is_admin()) with check (public.is_admin());
