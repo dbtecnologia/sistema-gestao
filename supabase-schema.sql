@@ -11,10 +11,10 @@ create table if not exists public.profiles (
 );
 
 alter table public.profiles enable row level security;
-drop policy if exists "authenticated users can read profiles" on public.profiles;
-create policy "authenticated users can read profiles" on public.profiles for select to authenticated using (true);
-drop policy if exists "users can update own profile" on public.profiles;
-create policy "users can update own profile" on public.profiles for update to authenticated using (id = (select auth.uid())) with check (id = (select auth.uid()));
+drop policy if exists profiles_read on public.profiles;
+create policy profiles_read on public.profiles for select to authenticated using (true);
+drop policy if exists profiles_update_own on public.profiles;
+create policy profiles_update_own on public.profiles for update to authenticated using (id = (select auth.uid())) with check (id = (select auth.uid()));
 
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
