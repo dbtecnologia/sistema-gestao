@@ -32,6 +32,15 @@ insert into public.profiles (id, full_name, role)
 select id, 'Administrador', 'admin' from auth.users where lower(email) = lower('dvdinho@hotmail.com')
 on conflict (id) do update set role = 'admin', full_name = 'Administrador';
 
+create or replace function public.is_admin()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.profiles where id = auth.uid() and role = 'admin' and active);
+$$;
+drop policy if exists profiles_update_own on public.profiles;
+create policy profiles_update_own on public.profiles for update to authenticated
+using (id = (select auth.uid()) or public.is_admin())
+with check (id = (select auth.uid()) or public.is_admin());
+
 create table if not exists public.sectors (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
