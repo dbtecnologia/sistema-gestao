@@ -1,6 +1,33 @@
 -- Sistema Gestão | frigorífico e açougue
 create extension if not exists pgcrypto;
 
+create table if not exists public.stores (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  slug text not null unique,
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.store_memberships (
+  id uuid primary key default gen_random_uuid(),
+  store_id uuid not null references public.stores(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  role text not null default 'operator' check (role in ('admin','manager','operator')),
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  unique(store_id, user_id)
+);
+
+alter table public.stores enable row level security;
+alter table public.store_memberships enable row level security;
+drop policy if exists stores_member_read on public.stores;
+create policy stores_member_read on public.stores for select to authenticated using (id in (select store_id from public.store_memberships where user_id = (select auth.uid()) and active));
+drop policy if exists memberships_self_read on public.store_memberships;
+create policy memberships_self_read on public.store_memberships for select to authenticated using (user_id = (select auth.uid()));
+
+insert into public.stores (name, slug) values ('Loja principal', 'loja-principal') on conflict (slug) do nothing;
+
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   full_name text,
@@ -43,6 +70,7 @@ with check (id = (select auth.uid()) or public.is_admin());
 
 create table if not exists public.sectors (
   id uuid primary key default gen_random_uuid(),
+  store_id uuid references public.stores(id) on delete cascade,
   name text not null unique,
   active boolean not null default true,
   created_at timestamptz not null default now()
@@ -50,6 +78,7 @@ create table if not exists public.sectors (
 
 create table if not exists public.equipment (
   id uuid primary key default gen_random_uuid(),
+  store_id uuid references public.stores(id) on delete cascade,
   sector_id uuid not null references public.sectors(id) on delete restrict,
   name text not null,
   kind text not null default 'refrigerator',
@@ -61,6 +90,7 @@ create table if not exists public.equipment (
 
 create table if not exists public.temperature_readings (
   id uuid primary key default gen_random_uuid(),
+  store_id uuid references public.stores(id) on delete cascade,
   equipment_id uuid not null references public.equipment(id) on delete restrict,
   value numeric(5,2) not null,
   measured_at timestamptz not null default now(),
@@ -87,6 +117,7 @@ create trigger temperature_parameter_status before insert or update of equipment
 
 create table if not exists public.checklists (
   id uuid primary key default gen_random_uuid(),
+  store_id uuid references public.stores(id) on delete cascade,
   sector_id uuid references public.sectors(id) on delete set null,
   name text not null,
   description text,
@@ -105,6 +136,7 @@ create table if not exists public.checklist_items (
 
 create table if not exists public.checklist_runs (
   id uuid primary key default gen_random_uuid(),
+  store_id uuid references public.stores(id) on delete cascade,
   checklist_id uuid not null references public.checklists(id) on delete restrict,
   status text not null default 'pending' check (status in ('pending','in_progress','completed','failed')),
   started_at timestamptz,
@@ -115,6 +147,7 @@ create table if not exists public.checklist_runs (
 
 create table if not exists public.occurrences (
   id uuid primary key default gen_random_uuid(),
+  store_id uuid references public.stores(id) on delete cascade,
   sector_id uuid references public.sectors(id) on delete set null,
   equipment_id uuid references public.equipment(id) on delete set null,
   title text not null,
