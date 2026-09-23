@@ -1,6 +1,37 @@
 -- Sistema Gestão | frigorífico e açougue
 create extension if not exists pgcrypto;
 
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  full_name text,
+  role text not null default 'operator' check (role in ('admin','manager','operator')),
+  active boolean not null default true,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table public.profiles enable row level security;
+drop policy if exists "authenticated users can read profiles" on public.profiles;
+create policy "authenticated users can read profiles" on public.profiles for select to authenticated using (true);
+drop policy if exists "users can update own profile" on public.profiles;
+create policy "users can update own profile" on public.profiles for update to authenticated using (id = (select auth.uid())) with check (id = (select auth.uid()));
+
+create or replace function public.handle_new_user()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  insert into public.profiles (id, full_name, role)
+  values (new.id, coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)), 'operator')
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created after insert on auth.users for each row execute procedure public.handle_new_user();
+insert into public.profiles (id, full_name, role)
+select id, 'Administrador', 'admin' from auth.users where lower(email) = lower('dvdinho@hotmail.com')
+on conflict (id) do update set role = 'admin', full_name = 'Administrador';
+
 create table if not exists public.sectors (
   id uuid primary key default gen_random_uuid(),
   name text not null unique,
